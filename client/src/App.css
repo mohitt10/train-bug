@@ -1,0 +1,45 @@
+.app-shell {
+  width: min(720px, 100%);
+  margin: auto;
+  padding: 64px 24px;
+  text-align: left;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-shell h1 {
+  margin: 12px 0;
+}
+
+.description {
+  margin-bottom: 32px;
+}
+
+.api-card {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--social-bg);
+}
+
+.api-card h2 {
+  margin-bottom: 12px;
+}
+
+.status {
+  margin: 0;
+}
+
+.status-connected {
+  color: #16803c;
+}
+
+.status-error {
+  color: #b42318;
+}
