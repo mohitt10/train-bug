@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1720 1400" role="img" aria-labelledby="title description">
+  <title id="title">WanderLog entity-relationship diagram — iteration 4</title>
+  <desc id="description">Social platform ER diagram with users, moderators, posts, comments, replies, reports, follows, and post and comment likes. Includes cardinalities and the rule that each report targets exactly one post, comment, or reply.</desc>
+  <defs>
+    <style>
+      text { font-family: Inter, "Segoe UI", Arial, sans-serif; fill: #18304b; }
+      .page { fill: #f4f7fb; }
+      .title { font-size: 32px; font-weight: 750; }
+      .subtitle { font-size: 15px; fill: #52677f; }
+      .card { fill: #fff; stroke: #b9c9db; stroke-width: 1.5; rx: 12; }
+      .head { fill: #e6effa; }
+      .head-assoc { fill: #e6f4ef; }
+      .head-subtype { fill: #f2eafa; }
+      .entity { font-size: 17px; font-weight: 750; letter-spacing: .6px; }
+      .field { font-size: 14px; }
+      .key { font-weight: 700; fill: #154a75; }
+      .muted { fill: #63778e; }
+      .edge { fill: none; stroke: #496984; stroke-width: 2; }
+      .edge-dash { fill: none; stroke: #8a6aa8; stroke-width: 2; stroke-dasharray: 7 6; }
+      .edge-label { font-size: 12px; font-weight: 650; fill: #36536e; }
+      .pill { fill: #fff; stroke: #c5d2df; stroke-width: 1; rx: 8; }
+      .section { font-size: 18px; font-weight: 730; }
+      .note { font-size: 13px; }
+      .small { font-size: 12px; }
+      .pk { fill: #16734b; font-weight: 700; }
+      .fk { fill: #315f9b; font-weight: 650; }
+      .warn { fill: #fff8e8; stroke: #e4bd64; stroke-width: 1.5; rx: 10; }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#496984"/>
+    </marker>
+  </defs>
+
+  <rect class="page" width="1720" height="1400"/>
+  <text class="title" x="56" y="54">WanderLog — Entity Relationship Diagram</text>
+  <text class="subtitle" x="58" y="82">Iteration 4 · relational entities, keys, and cardinalities</text>
+
+  <!-- Core entities -->
+  <g transform="translate(80 130)">
+    <rect class="card" width="340" height="260"/>
+    <path class="head" d="M12 0 H328 Q340 0 340 12 V42 H0 V12 Q0 0 12 0"/>
+    <text class="entity" x="18" y="28">USERS</text>
+    <text class="field pk" x="18" y="72">PK  user_id</text>
+    <text class="field" x="18" y="102">username · UNIQUE</text>
+    <text class="field" x="18" y="132">email · UNIQUE</text>
+    <text class="field" x="18" y="162">password_hash</text>
+    <text class="field" x="18" y="192">display_name · bio</text>
+    <text class="field" x="18" y="222">account_status · created_at · updated_at</text>
+  </g>
+
+  <g transform="translate(635 130)">
+    <rect class="card" width="290" height="150"/>
+    <path class="head-assoc" d="M12 0 H278 Q290 0 290 12 V42 H0 V12 Q0 0 12 0"/>
+    <text class="entity" x="18" y="28">FOLLOWS</text>
+    <text class="field pk" x="18" y="72">PK, FK  follower_id → USERS</text>
+    <text class="field pk" x="18" y="102">PK, FK  followed_id → USERS</text>
+    <text class="field" x="18" y="132">followed_at · CHECK ids differ</text>
+  </g>
+
+  <g transform="translate(1220 130)">
+    <rect class="card" width="420" height="240"/>
+    <path class="head" d="M12 0 H408 Q420 0 420 12 V42 H0 V12 Q0 0 12 0"/>
+    <text class="entity" x="18" y="28">POSTS</text>
+    <text class="field pk" x="18" y="72">PK  post_id</text>
+    <text class="field fk" x="18" y="102">FK  author_user_id → USERS</text>
+    <text class="field" x="18" y="132">title · content · location</text>
+    <text class="field" x="18" y="162">created_at · updated_at</text>
+  </g>
+
+  <g transform="translate(80 500)">
+    <rect class="card" width="340" height="150"/>
+    <path class="head-subtype" d="M12 0 H328 Q340 0 340 12 V42 H0 V12 Q0 0 12 0"/>
+    <text class="entity" x="18" y="28">MODERATORS</text>
+    <text class="field pk" x="18" y="72">PK, FK  user_id → USERS</text>
+    <text class="field" x="18" y="102">moderator_since</text>
+    <text class="small muted" x="18" y="130">Optional subtype; every moderator is a user.</text>
+  </g>
+
+  <g transform="translate(635 350)">
+    <rect class="card" width="290" height="160"/>
+    <path class="head-assoc" d="M12 0 H278 Q290 0 290 12 V42 H0 V12 Q0 0 12 0"/>
+    <text class="entity" x="18" y="28">POST_LIKES</text>
+    <text class="field pk" x="18" y="72">PK, FK  user_id → USERS</text>
+    <text class="field pk" x="18" y="102">PK, FK  post_id → POSTS</text>
+    <text class="field" x="18" y="132">liked_at</text>
+  </g>
+
+  <g transform="translate(80 700)">
+    <rect class="card" width="440" height="220"/>
+    <path class="head" d="M12 0 H428 Q440 0 440 12 V42 H0 V12 Q0 0 12 0"/>
+    <text class="entity" x="18" y="28">COMMENTS</text>
+    <text class="field pk" x="18" y="72">PK  comment_id</text>
+    <text class="field fk" x="18" y="102">FK  author_user_id → USERS</text>
+    <text class="field fk" x="18" y="132">FK  post_id → POSTS</text>
+    <text class="field" x="18" y="162">content</text>
+    <text class="field" x="18" y="192">created_at · updated_at</text>
+  </g>
+
+  <g transform="translate(635 700)">
+    <rect class="card" width="290" height="160"/>
+    <path class="head-assoc" d="M12 0 H278 Q290 0 290 12 V42 H0 V12 Q0 0 12 0"/>
+    <text class="entity" x="18" y="28">COMMENT_LIKES</text>
+    <text class="field pk" x="18" y="72">PK, FK  user_id → USERS</text>
+    <text class="field pk" x="18" y="102">PK, FK  comment_id → COMMENTS</text>
+    <text class="field" x="18" y="132">liked_at</text>
+  </g>
+
+  <g transform="translate(1220 500)">
+    <rect class="card" width="420" height="200"/>
+    <path class="head" d="M12 0 H408 Q420 0 420 12 V42 H0 V12 Q0 0 12 0"/>
+    <text class="entity" x="18" y="28">REPLIES</text>
+    <text class="field pk" x="18" y="72">PK  reply_id</text>
+    <text class="field fk" x="18" y="102">FK  author_user_id → USERS</text>
+    <text class="field fk" x="18" y="132">FK  comment_id → COMMENTS</text>
+    <text class="field" x="18" y="162">content · created_at · updated_at</text>
+  </g>
+
+  <g transform="translate(1220 760)">
+    <rect class="card" width="420" height="300"/>
+    <path class="head" d="M12 0 H408 Q420 0 420 12 V42 H0 V12 Q0 0 12 0"/>
+    <text class="entity" x="18" y="28">REPORTS</text>
+    <text class="field pk" x="18" y="72">PK  report_id</text>
+    <text class="field fk" x="18" y="102">FK  reporter_user_id → USERS</text>
+    <text class="field fk" x="18" y="132">FK  reviewed_by → MODERATORS · NULLABLE</text>
+    <text class="field fk" x="18" y="162">FK  post_id → POSTS · NULLABLE</text>
+    <text class="field fk" x="18" y="192">FK  comment_id → COMMENTS · NULLABLE</text>
+    <text class="field fk" x="18" y="222">FK  reply_id → REPLIES · NULLABLE</text>
+    <text class="field" x="18" y="252">reason · status · created_at</text>
+    <text class="small muted" x="18" y="280">Exactly one target FK is non-NULL (CHECK constraint).</text>
+  </g>
+
+  <!-- Cardinality and integrity summary -->
+  <g transform="translate(80 1000)">
+    <rect class="card" width="1040" height="300"/>
+    <text class="section" x="22" y="38">Relationship rules</text>
+    <text class="small muted" x="22" y="58">Foreign-key fields above identify the linked entities; cardinalities and optionality are stated here.</text>
+    <text class="note" x="22" y="76"><tspan font-weight="700">Users — Posts:</tspan> one user creates zero or many posts; each post has exactly one author.</text>
+    <text class="note" x="22" y="108"><tspan font-weight="700">Users — Comments / Replies:</tspan> one author can write zero or many; each record has one author.</text>
+    <text class="note" x="22" y="140"><tspan font-weight="700">Posts — Comments:</tspan> one post has zero or many comments; each comment belongs to exactly one post.</text>
+    <text class="note" x="22" y="172"><tspan font-weight="700">Comments — Replies:</tspan> one comment has zero or many replies; each reply belongs to exactly one comment.</text>
+    <text class="note" x="22" y="204"><tspan font-weight="700">Follows:</tspan> users may follow many users and be followed by many; self-follow is prohibited.</text>
+    <text class="note" x="22" y="236"><tspan font-weight="700">Likes:</tspan> users may like many posts/comments; each target may have many likes.</text>
+    <text class="note" x="22" y="268"><tspan font-weight="700">Reports / review:</tspan> one target per report; a target may have many reports; review assignment is optional.</text>
+  </g>
+
+  <g transform="translate(1220 1100)">
+    <rect class="warn" width="420" height="180"/>
+    <text class="section" x="18" y="36">Implementation constraint</text>
+    <text class="note" x="18" y="70">Enforce exactly one report target in the database,</text>
+    <text class="note" x="18" y="94">for example with a CHECK over the three nullable FKs.</text>
+    <text class="small muted" x="18" y="130">Also enforce unique username/email, and prevent a</text>
+    <text class="small muted" x="18" y="152">user from following or liking the same target twice.</text>
+  </g>
+
+  <g transform="translate(80 1340)">
+    <rect class="pill" width="16" height="16"/>
+    <text class="small" x="24" y="13"><tspan class="pk">PK</tspan> primary key</text>
+    <rect class="pill" x="160" width="16" height="16"/>
+    <text class="small" x="184" y="13"><tspan class="fk">FK</tspan> foreign key</text>
+    <text class="small muted" x="350" y="13">Cardinality ranges are stated in the relationship rules; optionality is explicit where applicable.</text>
+  </g>
+</svg>
