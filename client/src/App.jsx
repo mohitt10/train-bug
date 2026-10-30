@@ -1,58 +1,41 @@
-import { useEffect, useState } from 'react'
-import './App.css'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import './phase2.css'
+import Navbar from './components/Navbar.jsx'
+import ProtectedRoute from './components/ProtectedRoute.jsx'
+import { useAuth } from './context/AuthContext.js'
+import EditProfile from './pages/EditProfile.jsx'
+import FollowList from './pages/FollowList.jsx'
+import Login from './pages/Login.jsx'
+import Profile from './pages/Profile.jsx'
+import Register from './pages/Register.jsx'
 
-function App() {
-  const [health, setHealth] = useState(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    async function checkApi() {
-      try {
-        const response = await fetch('/api/health')
-
-        if (!response.ok) {
-          throw new Error(`API returned HTTP ${response.status}`)
-        }
-
-        const data = await response.json()
-        setHealth(data)
-        setError('')
-      } catch (requestError) {
-        setHealth(null)
-        setError(requestError.message)
-      }
-    }
-
-    checkApi()
-  }, [])
-
-  return (
-    <main className="app-shell">
-      <p className="eyebrow">Social media platform</p>
-      <h1>React + Flask</h1>
-      <p className="description">
-        React renders the interface; Flask provides the API.
-      </p>
-
-      <section className="api-card" aria-live="polite">
-        <h2>Backend status</h2>
-
-        {health && (
-          <p className="status status-connected">
-            Connected — {health.service}
-          </p>
-        )}
-
-        {error && (
-          <p className="status status-error">
-            Could not connect to the backend: {error}
-          </p>
-        )}
-
-        {!health && !error && <p className="status">Checking backend…</p>}
-      </section>
-    </main>
-  )
+// Phase 3 will replace this with the feed at "/".
+function Home() {
+  const { user, loading } = useAuth()
+  if (loading) return <p className="wl-muted">Loading…</p>
+  return <Navigate to={user ? `/users/${user.user_id}` : '/login'} replace />
 }
 
-export default App
+function NotFound() {
+  return <p>Page not found.</p>
+}
+
+export default function App() {
+  return (
+    <>
+      <Navbar />
+      <main className="wl-main">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/users/:userId" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/users/:userId/followers" element={<ProtectedRoute><FollowList kind="followers" /></ProtectedRoute>} />
+          <Route path="/users/:userId/following" element={<ProtectedRoute><FollowList kind="following" /></ProtectedRoute>} />
+          <Route path="/settings/profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+    </>
+  )
+}
