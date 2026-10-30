@@ -1,100 +1,26 @@
 """
-DEV STUB: replace with Phase 1/2 integration. See docs/phase3-integration.md
+DEV STUB: replace with Phase 2 integration. See docs/phase3-integration.md
 
-This module isolates Phase 3 from Phase 1 (database connection, query capture)
-and Phase 2 (authentication, user session). In production, an integrator will
-replace the internals of these functions with calls to Phase 1's execute_query
-and Phase 2's session/token auth.
+Phase 3 is now wired to Phase 1 (server/db.py and query_monitor.py).
+Only the authentication functions (current_user_id / login_required) remain
+as dev stubs awaiting Phase 2 integration.
 """
 
 import os
 import functools
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
-from flask import g, has_request_context, jsonify, request
+from flask import g, has_request_context, request
 
-# Support both psycopg (v3) and psycopg2
-try:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-    from psycopg2 import errors as pg_errors
-    _DRIVER = "psycopg2"
-except ImportError:
-    try:
-        import psycopg
-        from psycopg.rows import dict_row
-        from psycopg import errors as pg_errors
-        _DRIVER = "psycopg"
-    except ImportError:
-        _DRIVER = None
-        pg_errors = None
-
-
-def _get_db_connection():
-    """Establish a database connection using environment variables."""
-    if _DRIVER is None:
-        raise RuntimeError("Neither psycopg nor psycopg2 is installed.")
-
-    database_url = os.getenv("DATABASE_URL")
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-    dbname = os.getenv("DB_NAME", "wanderlog")
-    user = os.getenv("DB_USER", "postgres")
-    password = os.getenv("DB_PASSWORD", "postgres")
-
-    if _DRIVER == "psycopg2":
-        if database_url:
-            return psycopg2.connect(database_url, cursor_factory=RealDictCursor)
-        return psycopg2.connect(
-            host=host,
-            port=port,
-            dbname=dbname,
-            user=user,
-            password=password,
-            cursor_factory=RealDictCursor,
-        )
-    else:
-        conn_str = database_url or f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-        return psycopg.connect(conn_str, row_factory=dict_row)
+import db
+from .responses import error_response
 
 
 @contextmanager
 def transaction():
-    """
-    Context manager for multi-statement atomic operations.
-    Commits on clean exit, rolls back on exception.
-    """
-    if not has_request_context():
-        # Standalone context
-        conn = _get_db_connection()
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-        return
-
-    # Check if a transaction is already active in this request
-    existing_conn = getattr(g, "_phase3_tx_conn", None)
-    if existing_conn is not None:
-        # Re-use existing transaction
-        yield existing_conn
-        return
-
-    conn = _get_db_connection()
-    g._phase3_tx_conn = conn
-    try:
+    """Context manager for transactions, delegated to Phase 1's db.transaction."""
+    with db.transaction() as conn:
         yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        g._phase3_tx_conn = None
-        conn.close()
 
 
 def run_query(
@@ -105,88 +31,83 @@ def run_query(
     fetch: str = "all",
 ) -> Union[List[Dict[str, Any]], Optional[Dict[str, Any]], int]:
     """
-    Executes parameterized SQL (%s placeholders).
-    
+    Executes parameterized SQL via Phase 1 db.execute_query and maps results to dicts.
+
     Args:
-        sql: SQL query template with %s placeholders.
+        sql: Parameterized SQL statement string.
         params: Tuple of query parameter values.
-        action: Human-readable action label (e.g. 'feed:list', 'post:create').
+        action: Descriptive action label for query monitoring.
         fetch: One of 'all', 'one', or 'none'.
-               - 'all': returns list of dict rows
-               - 'one': returns single dict or None
-               - 'none': returns affected row count (int)
     """
     if fetch not in ("all", "one", "none"):
         raise ValueError("fetch must be 'all', 'one', or 'none'.")
 
-    # If within a transaction, use the shared transaction connection
-    tx_conn = getattr(g, "_phase3_tx_conn", None) if has_request_context() else None
-    conn = tx_conn if tx_conn is not None else _get_db_connection()
-    cursor = None
+    db_fetch = None if fetch == "none" else fetch
+    result = db.execute_query(sql, params, fetch=db_fetch, action=action)
 
-    try:
-        if _DRIVER == "psycopg2":
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-        else:
-            cursor = conn.cursor(row_factory=dict_row)
+    if fetch == "none":
+        return result.get("affected_rows") or 0
 
-        cursor.execute(sql, params)
+    cols = result.get("columns") or []
+    rows = result.get("rows")
 
-        if fetch == "one":
-            row = cursor.fetchone()
-            result = dict(row) if row is not None else None
-        elif fetch == "all":
-            rows = cursor.fetchall()
-            result = [dict(r) for r in rows]
-        else:
-            result = cursor.rowcount
+    if fetch == "one":
+        if rows is None:
+            return None
+        return dict(zip(cols, rows))
 
-        if tx_conn is None:
-            conn.commit()
+    if rows is None:
+        return []
 
-        return result
-
-    except Exception:
-        if tx_conn is None:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-        raise
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if tx_conn is None:
-            conn.close()
+    return [dict(zip(cols, r)) for r in rows]
 
 
 def current_user_id() -> Optional[int]:
     """
-    DEV STUB: Extracts authenticated user ID from request headers.
+    DEV STUB: Extracts authenticated user ID from request headers ONLY when ALLOW_DEV_AUTH=1.
+    Verifies that the user actually exists in the database and caches result on flask.g.
     In Phase 2 integration, this will inspect Flask session or auth tokens.
     """
     if not has_request_context():
         return None
 
+    if hasattr(g, "_cached_user_id"):
+        return g._cached_user_id
+
+    allow_dev_auth = os.getenv("ALLOW_DEV_AUTH", "0") == "1"
+    if not allow_dev_auth:
+        g._cached_user_id = None
+        return None
+
     header_val = request.headers.get("X-Dev-User-Id")
-    if header_val:
-        try:
-            uid = int(header_val)
-            if uid > 0:
-                return uid
-        except (ValueError, TypeError):
-            pass
+    if not header_val:
+        g._cached_user_id = None
+        return None
 
-    # Allow query parameter in dev for browser testing convenience
-    arg_val = request.args.get("dev_user_id")
-    if arg_val:
-        try:
-            uid = int(arg_val)
-            if uid > 0:
-                return uid
-        except (ValueError, TypeError):
-            pass
+    try:
+        uid = int(header_val)
+        if uid <= 0:
+            g._cached_user_id = None
+            return None
+    except (ValueError, TypeError):
+        g._cached_user_id = None
+        return None
 
+    # Verify user exists in the database
+    try:
+        user_row = run_query(
+            "SELECT user_id FROM users WHERE user_id = %s;",
+            (uid,),
+            action="auth:dev_user_lookup",
+            fetch="one",
+        )
+        if user_row:
+            g._cached_user_id = uid
+            return uid
+    except Exception:
+        pass
+
+    g._cached_user_id = None
     return None
 
 
@@ -196,31 +117,40 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         uid = current_user_id()
         if not uid:
-            return jsonify({
-                "error": {
-                    "code": "UNAUTHORIZED",
-                    "message": "Authentication required. Please provide credentials.",
-                }
-            }), 401
+            return error_response(
+                "UNAUTHORIZED",
+                "Authentication required. Please provide credentials.",
+                401,
+            )
         return f(*args, **kwargs)
     return decorated_function
 
 
-def map_db_error(exc: Exception) -> Tuple[int, str]:
+def map_db_error(exc: Exception, is_delete: bool = False) -> Tuple[int, str]:
     """
     Translates database driver exceptions into safe HTTP status and public message.
-    Never leaks SQL, schemas, or parameter values.
+    Conceals SQL and database internals.
     """
-    # Check SQLSTATE or pgcode
-    pgcode = getattr(exc, "pgcode", getattr(exc, "sqlstate", None))
+    sqlstate = getattr(exc, "sqlstate", getattr(exc, "pgcode", None))
 
-    if pgcode == "23503":
+    if sqlstate == "23503":
+        if is_delete:
+            return 409, "This item cannot be deleted because other records still depend on it."
         return 400, "The referenced resource does not exist."
-    if pgcode == "23505":
+    if sqlstate == "23505":
         return 409, "A conflicting record already exists."
-    if pgcode == "23514":
+    if sqlstate == "23514":
         return 400, "The submitted data violated a database constraint."
-    if pgcode == "23502":
+    if sqlstate == "23502":
         return 400, "A required field was missing or null."
+    if sqlstate in ("22007", "22008", "22P02", "22003"):
+        return 400, "Invalid value supplied."
+    if sqlstate in ("40001", "40P01"):
+        return 409, "Please retry the request."
 
     return 500, "A database error occurred while processing the request."
+
+
+def map_db_error_for_delete(exc: Exception) -> Tuple[int, str]:
+    """Helper specifically for DELETE operations."""
+    return map_db_error(exc, is_delete=True)
