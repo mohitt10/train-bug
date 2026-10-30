@@ -11,6 +11,7 @@ export function PostCard({
   onPostDeleted,
   onAuthorClick,
   onOpenDetail,
+  onCommentCountChange,
   isDetailView = false,
 }) {
   const { user } = useCurrentUser();
@@ -23,7 +24,6 @@ export function PostCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionError, setActionError] = useState('');
   const [showComments, setShowComments] = useState(isDetailView);
-  const [commentCount, setCommentCount] = useState(post.comment_count || 0);
 
   const isOwner = Boolean(user && user.user_id === post.user_id);
   const edited = isEdited(post.created_at, post.updated_at);
@@ -71,8 +71,10 @@ export function PostCard({
     }
   };
 
-  const handleCommentCountChange = (delta) => {
-    setCommentCount((prev) => Math.max(0, prev + delta));
+  const handleCommentCountDelta = (delta) => {
+    if (onCommentCountChange) {
+      onCommentCountChange(post.post_id, delta);
+    }
   };
 
   return (
@@ -211,7 +213,7 @@ export function PostCard({
             setShowComments((prev) => !prev);
           }}
         >
-          💬 Comments ({commentCount})
+          💬 Comments ({post.comment_count || 0})
         </button>
 
         {!isDetailView && onOpenDetail && (
@@ -228,7 +230,7 @@ export function PostCard({
       {showComments && (
         <CommentList
           postId={post.post_id}
-          onCommentCountChange={handleCommentCountChange}
+          onCommentCountChange={handleCommentCountDelta}
         />
       )}
 

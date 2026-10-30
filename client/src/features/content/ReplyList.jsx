@@ -10,28 +10,51 @@ export function ReplyList({ commentId, onReplyCountChange }) {
   const [replies, setReplies] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  
+
   // New reply composer state
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [composerError, setComposerError] = useState('');
 
-  const loadReplies = async () => {
+  useEffect(() => {
+    const controller = new AbortController();
     setIsLoading(true);
     setError('');
-    try {
-      const data = await getReplies(commentId);
-      setReplies(data.items || []);
-    } catch (err) {
-      setError(err.message || 'Could not load replies.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    loadReplies();
+    async function fetchReplies() {
+      try {
+        const data = await getReplies(commentId, { signal: controller.signal });
+        setReplies(data.items || []);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setError(err.message || 'Could not load replies.');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchReplies();
+
+    return () => {
+      controller.abort();
+    };
   }, [commentId]);
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError('');
+    getReplies(commentId)
+      .then((data) => setReplies(data.items || []))
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          setError(err.message || 'Could not load replies.');
+        }
+      })
+      .finally(() => setIsLoading(false));
+  };
 
   const handleCreateReply = async (e) => {
     e.preventDefault();
@@ -79,7 +102,7 @@ export function ReplyList({ commentId, onReplyCountChange }) {
       {isLoading ? (
         <Loading message="Loading replies…" />
       ) : error ? (
-        <ErrorMessage message={error} onRetry={loadReplies} />
+        <ErrorMessage message={error} onRetry={handleRetry} />
       ) : (
         <div className="replies-list">
           {replies.map((reply) => (

@@ -17,22 +17,45 @@ export function CommentList({ postId, onCommentCountChange }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [composerError, setComposerError] = useState('');
 
-  const loadComments = async () => {
+  useEffect(() => {
+    const controller = new AbortController();
     setIsLoading(true);
     setError('');
-    try {
-      const data = await getComments(postId);
-      setComments(data.items || []);
-    } catch (err) {
-      setError(err.message || 'Could not load comments.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    loadComments();
+    async function fetchComments() {
+      try {
+        const data = await getComments(postId, { signal: controller.signal });
+        setComments(data.items || []);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setError(err.message || 'Could not load comments.');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchComments();
+
+    return () => {
+      controller.abort();
+    };
   }, [postId]);
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError('');
+    getComments(postId)
+      .then((data) => setComments(data.items || []))
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          setError(err.message || 'Could not load comments.');
+        }
+      })
+      .finally(() => setIsLoading(false));
+  };
 
   const handleCreateComment = async (e) => {
     e.preventDefault();
@@ -125,7 +148,7 @@ export function CommentList({ postId, onCommentCountChange }) {
       {isLoading ? (
         <Loading message="Loading discussion…" />
       ) : error ? (
-        <ErrorMessage message={error} onRetry={loadComments} />
+        <ErrorMessage message={error} onRetry={handleRetry} />
       ) : comments.length === 0 ? (
         <Empty
           title="No comments yet"

@@ -656,3 +656,30 @@
   color: var(--text);
   font-size: 14px;
 }
+
+/* Posted Notice Banner */
+.posted-notice-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+/* Load More Error Box */
+.load-more-error-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  margin: 12px 0;
+  border-radius: 8px;
+  background: rgba(180, 35, 24, 0.08);
+  border: 1px solid rgba(180, 35, 24, 0.2);
+}

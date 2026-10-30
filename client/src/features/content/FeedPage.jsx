@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useCurrentUser } from '../../api/authBridge';
 import { getFeed, getUserPosts } from '../../api/contentApi';
 import { PostComposer } from './PostComposer';
@@ -10,26 +10,41 @@ import { Empty } from './Empty';
 import { ErrorMessage } from './ErrorMessage';
 
 export function FeedPage() {
-  const { user, isLoggedIn, setDevUserId, availableDevUsers } = useCurrentUser();
+  const { user, availableDevUsers, setDevUserId } = useCurrentUser();
 
   // Navigation state: either { view: 'feed' } or { view: 'detail', postId }
   const [navigation, setNavigation] = useState({ view: 'feed', postId: null });
 
   // Filtering by specific author (null for global feed)
   const [authorFilter, setAuthorFilter] = useState(null);
+  const [authorUser, setAuthorUser] = useState(null);
 
   const [posts, setPosts] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [error, setError] = useState('');
+  const [initialError, setInitialError] = useState('');
+  const [loadMoreError, setLoadMoreError] = useState('');
+  const [postedNotice, setPostedNotice] = useState(false);
 
-  const loadFeed = async (reset = true) => {
+  // Track active fetch to cancel stale requests
+  const activeControllerRef = useRef(null);
+
+  const loadFeed = useCallback(async (reset = true) => {
+    // Abort previous in-flight request
+    if (activeControllerRef.current) {
+      activeControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+
     if (reset) {
       setIsLoading(true);
-      setError('');
+      setInitialError('');
+      setLoadMoreError('');
     } else {
       setIsLoadingMore(true);
+      setLoadMoreError('');
     }
 
     try {
@@ -37,9 +52,13 @@ export function FeedPage() {
       let data;
 
       if (authorFilter) {
-        data = await getUserPosts(authorFilter, cursor);
+        data = await getUserPosts(authorFilter, cursor, 20, { signal: controller.signal });
+        if (data.user) {
+          setAuthorUser(data.user);
+        }
       } else {
-        data = await getFeed(cursor);
+        data = await getFeed(cursor, 20, { signal: controller.signal });
+        setAuthorUser(null);
       }
 
       if (reset) {
@@ -49,19 +68,38 @@ export function FeedPage() {
       }
       setNextCursor(data.next_cursor || null);
     } catch (err) {
-      setError(err.message || 'Could not fetch posts.');
+      if (err.name !== 'AbortError') {
+        if (reset) {
+          setInitialError(err.message || 'Could not fetch posts.');
+        } else {
+          setLoadMoreError(err.message || 'Could not load older posts.');
+        }
+      }
     } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
+      if (!controller.signal.aborted) {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+      }
     }
-  };
+  }, [authorFilter, nextCursor]);
 
   useEffect(() => {
     loadFeed(true);
-  }, [authorFilter]);
+    return () => {
+      if (activeControllerRef.current) {
+        activeControllerRef.current.abort();
+      }
+    };
+  }, [authorFilter]); // Only re-run when authorFilter changes
 
   const handlePostCreated = (newPost) => {
-    setPosts((prev) => [newPost, ...prev]);
+    // Only prepend if global feed or currently filtering by the author
+    if (!authorFilter || (user && authorFilter === user.user_id)) {
+      setPosts((prev) => [newPost, ...prev]);
+      setPostedNotice(false);
+    } else {
+      setPostedNotice(true);
+    }
   };
 
   const handlePostUpdated = (updated) => {
@@ -74,9 +112,25 @@ export function FeedPage() {
     setPosts((prev) => prev.filter((p) => p.post_id !== postId));
   };
 
+  const handleCommentCountChange = (postId, delta) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.post_id === postId
+          ? { ...p, comment_count: Math.max(0, (p.comment_count || 0) + delta) }
+          : p
+      )
+    );
+  };
+
   const handleAuthorClick = (authorId) => {
     setAuthorFilter(authorId);
     setNavigation({ view: 'feed', postId: null });
+  };
+
+  const handleClearFilter = () => {
+    setAuthorFilter(null);
+    setAuthorUser(null);
+    setPostedNotice(false);
   };
 
   const handleOpenDetail = (postId) => {
@@ -117,6 +171,9 @@ export function FeedPage() {
         <PostDetail
           postId={navigation.postId}
           onBack={handleBackToFeed}
+          onPostUpdated={handlePostUpdated}
+          onPostDeleted={handlePostDeleted}
+          onCommentCountChange={handleCommentCountChange}
         />
       ) : (
         <>
@@ -124,11 +181,18 @@ export function FeedPage() {
           <div className="feed-header-bar">
             {authorFilter ? (
               <div className="filter-pill">
-                <span>Showing posts by traveler #{authorFilter}</span>
+                <span>
+                  Posts by{' '}
+                  <strong>
+                    {authorUser
+                      ? `${authorUser.display_name} (@${authorUser.username})`
+                      : `traveler #${authorFilter}`}
+                  </strong>
+                </span>
                 <button
                   type="button"
                   className="filter-clear-btn"
-                  onClick={() => setAuthorFilter(null)}
+                  onClick={handleClearFilter}
                 >
                   ✕ View All Posts
                 </button>
@@ -141,14 +205,27 @@ export function FeedPage() {
             )}
           </div>
 
-          {/* Composer (only on global feed or own timeline) */}
+          {postedNotice && (
+            <div className="posted-notice-banner">
+              <span>Your story was published!</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleClearFilter}
+              >
+                View it in global feed
+              </button>
+            </div>
+          )}
+
+          {/* Composer */}
           <PostComposer onPostCreated={handlePostCreated} />
 
-          {/* Feed List */}
+          {/* Feed Stream */}
           {isLoading ? (
             <Loading message="Loading latest travel notes…" />
-          ) : error ? (
-            <ErrorMessage message={error} onRetry={() => loadFeed(true)} />
+          ) : initialError ? (
+            <ErrorMessage message={initialError} onRetry={() => loadFeed(true)} />
           ) : posts.length === 0 ? (
             <Empty
               title="No posts found"
@@ -162,7 +239,7 @@ export function FeedPage() {
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    onClick={() => setAuthorFilter(null)}
+                    onClick={handleClearFilter}
                   >
                     Return to global feed
                   </button>
@@ -179,8 +256,22 @@ export function FeedPage() {
                   onPostDeleted={handlePostDeleted}
                   onAuthorClick={handleAuthorClick}
                   onOpenDetail={handleOpenDetail}
+                  onCommentCountChange={handleCommentCountChange}
                 />
               ))}
+
+              {loadMoreError && (
+                <div className="load-more-error-box">
+                  <span className="error-text">⚠️ {loadMoreError}</span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => loadFeed(false)}
+                  >
+                    Retry loading more
+                  </button>
+                </div>
+              )}
 
               <Pagination
                 nextCursor={nextCursor}

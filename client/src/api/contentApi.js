@@ -29,104 +29,117 @@ async function request(endpoint, options = {}) {
     config.body = JSON.stringify(config.body);
   }
 
-  const response = await fetch(url, config);
+  try {
+    const response = await fetch(url, config);
 
-  if (response.status === 204) {
-    return null;
-  }
-
-  let data;
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
+    if (response.status === 204) {
+      return null;
     }
-  }
 
-  if (!response.ok) {
-    const errorObj = data?.error || {};
-    const normalizedError = new Error(
-      errorObj.message || `Request failed with HTTP ${response.status}`
-    );
-    normalizedError.status = response.status;
-    normalizedError.code = errorObj.code || 'UNKNOWN_ERROR';
-    throw normalizedError;
-  }
+    let data;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+    }
 
-  return data;
+    if (!response.ok) {
+      const errorObj = data?.error || {};
+      const normalizedError = new Error(
+        errorObj.message || `Request failed with HTTP ${response.status}`
+      );
+      normalizedError.status = response.status;
+      normalizedError.code = errorObj.code || 'UNKNOWN_ERROR';
+      throw normalizedError;
+    }
+
+    return data;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw err;
+    }
+    throw err;
+  }
 }
 
 // =========================================================
 // FEED & POSTS
 // =========================================================
 
-export async function getFeed(cursor = null, limit = 20) {
+export async function getFeed(cursor = null, limit = 20, options = {}) {
   const params = new URLSearchParams();
   if (limit) params.set('limit', limit);
   if (cursor) params.set('cursor', cursor);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  return request(`/feed${qs}`, { method: 'GET' });
+  return request(`/feed${qs}`, { method: 'GET', ...options });
 }
 
-export async function getPost(postId) {
-  return request(`/posts/${postId}`, { method: 'GET' });
+export async function getPost(postId, options = {}) {
+  return request(`/posts/${postId}`, { method: 'GET', ...options });
 }
 
-export async function createPost(postData) {
+export async function createPost(postData, options = {}) {
   return request('/posts', {
     method: 'POST',
     body: postData,
+    ...options,
   });
 }
 
-export async function updatePost(postId, postData) {
+export async function updatePost(postId, postData, options = {}) {
   return request(`/posts/${postId}`, {
     method: 'PATCH',
     body: postData,
+    ...options,
   });
 }
 
-export async function deletePost(postId) {
+export async function deletePost(postId, options = {}) {
   return request(`/posts/${postId}`, {
     method: 'DELETE',
+    ...options,
   });
 }
 
-export async function getUserPosts(userId, cursor = null, limit = 20) {
+export async function getUserPosts(userId, cursor = null, limit = 20, options = {}) {
   const params = new URLSearchParams();
   if (limit) params.set('limit', limit);
   if (cursor) params.set('cursor', cursor);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  return request(`/users/${userId}/posts${qs}`, { method: 'GET' });
+  return request(`/users/${userId}/posts${qs}`, { method: 'GET', ...options });
 }
 
 // =========================================================
 // COMMENTS
 // =========================================================
 
-export async function getComments(postId) {
-  return request(`/posts/${postId}/comments`, { method: 'GET' });
+export async function getComments(postId, options = {}) {
+  return request(`/posts/${postId}/comments`, { method: 'GET', ...options });
 }
 
-export async function createComment(postId, commentData) {
+export async function createComment(postId, commentData, options = {}) {
   return request(`/posts/${postId}/comments`, {
     method: 'POST',
     body: commentData,
+    ...options,
   });
 }
 
-export async function updateComment(commentId, commentData) {
+export async function updateComment(commentId, commentData, options = {}) {
   return request(`/comments/${commentId}`, {
     method: 'PATCH',
     body: commentData,
+    ...options,
   });
 }
 
-export async function deleteComment(commentId) {
+export async function deleteComment(commentId, options = {}) {
   return request(`/comments/${commentId}`, {
     method: 'DELETE',
+    ...options,
   });
 }
 
@@ -134,26 +147,29 @@ export async function deleteComment(commentId) {
 // REPLIES
 // =========================================================
 
-export async function getReplies(commentId) {
-  return request(`/comments/${commentId}/replies`, { method: 'GET' });
+export async function getReplies(commentId, options = {}) {
+  return request(`/comments/${commentId}/replies`, { method: 'GET', ...options });
 }
 
-export async function createReply(commentId, replyData) {
+export async function createReply(commentId, replyData, options = {}) {
   return request(`/comments/${commentId}/replies`, {
     method: 'POST',
     body: replyData,
+    ...options,
   });
 }
 
-export async function updateReply(replyId, replyData) {
+export async function updateReply(replyId, replyData, options = {}) {
   return request(`/replies/${replyId}`, {
     method: 'PATCH',
     body: replyData,
+    ...options,
   });
 }
 
-export async function deleteReply(replyId) {
+export async function deleteReply(replyId, options = {}) {
   return request(`/replies/${replyId}`, {
     method: 'DELETE',
+    ...options,
   });
 }
