@@ -1,5 +1,6 @@
 import time
 import re
+from contextlib import contextmanager
 import psycopg
 from flask import g, has_request_context
 
@@ -101,6 +102,46 @@ def get_connection():
     )
 
 
+@contextmanager
+def transaction():
+    """
+    Context manager for multi-statement atomic transactions.
+    Reuses an outer transaction if nested.
+    Commits on clean exit, rolls back on exception, and always closes the connection
+    when the outermost transaction exits.
+    """
+    in_request = has_request_context()
+    existing_conn = getattr(g, "_db_tx_conn", None) if in_request else None
+
+    if existing_conn is not None:
+        g._db_tx_depth = getattr(g, "_db_tx_depth", 1) + 1
+        try:
+            yield existing_conn
+        finally:
+            g._db_tx_depth -= 1
+        return
+
+    conn = get_connection()
+    if in_request:
+        g._db_tx_conn = conn
+        g._db_tx_depth = 1
+
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except psycopg.Error:
+            pass
+        raise
+    finally:
+        if in_request:
+            g._db_tx_conn = None
+            g._db_tx_depth = 0
+        conn.close()
+
+
 def execute_query(sql, params=None, *, fetch=None, action=None):
     """
     Execute parameterized SQL and record its execution metadata.
@@ -112,7 +153,7 @@ def execute_query(sql, params=None, *, fetch=None, action=None):
         action: Optional descriptive action name.
 
     Returns:
-        A dictionary containing rows and affected_rows.
+        A dictionary containing rows, affected_rows, and columns.
 
     Raises:
         The original database exception if execution fails.
@@ -133,19 +174,28 @@ def execute_query(sql, params=None, *, fetch=None, action=None):
     query_action = action or endpoint or "database_operation"
 
     start_time = time.perf_counter()
-    connection = None
+    in_tx = False
+    if has_request_context() and getattr(g, "_db_tx_conn", None) is not None:
+        in_tx = True
+        connection = g._db_tx_conn
+    else:
+        connection = None
+
     cursor = None
     affected_rows = None
+    columns = None
     execution_attempted = False
 
     try:
-        connection = get_connection()
+        if connection is None:
+            connection = get_connection()
         cursor = connection.cursor()
 
         execution_attempted = True
         cursor.execute(sql, params)
 
         affected_rows = cursor.rowcount
+        columns = [col.name for col in cursor.description] if cursor.description else None
 
         if fetch == "one":
             rows = cursor.fetchone()
@@ -154,7 +204,8 @@ def execute_query(sql, params=None, *, fetch=None, action=None):
         else:
             rows = None
 
-        connection.commit()
+        if not in_tx:
+            connection.commit()
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
@@ -172,10 +223,11 @@ def execute_query(sql, params=None, *, fetch=None, action=None):
         return {
             "rows": rows,
             "affected_rows": affected_rows,
+            "columns": columns,
         }
 
     except Exception as exc:
-        if connection is not None:
+        if not in_tx and connection is not None:
             try:
                 connection.rollback()
             except psycopg.Error:
@@ -211,5 +263,5 @@ def execute_query(sql, params=None, *, fetch=None, action=None):
         if cursor is not None:
             cursor.close()
 
-        if connection is not None:
+        if not in_tx and connection is not None:
             connection.close()

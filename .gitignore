@@ -11,5 +11,9 @@ server/.venv/
 .env.*
 !.env.example
 
-# Editor backup files
+# Editor and Office lock files
 *~
+~$*
+
+# Archives
+*.zip
