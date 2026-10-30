@@ -1,7 +1,7 @@
 .app-shell {
   width: min(720px, 100%);
   margin: auto;
-  padding: 64px 24px;
+  padding: 48px 24px;
   text-align: left;
 }
 
@@ -14,26 +14,52 @@
 }
 
 .app-shell h1 {
-  margin: 12px 0;
+  margin: 12px 0 8px;
 }
 
 .description {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.api-footer {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.btn-status-toggle {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.btn-status-toggle:hover {
+  color: var(--text-h);
+  background: var(--code-bg);
 }
 
 .api-card {
-  padding: 24px;
+  margin-top: 12px;
+  padding: 20px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--social-bg);
 }
 
 .api-card h2 {
-  margin-bottom: 12px;
+  font-size: 18px;
+  margin-bottom: 8px;
 }
 
 .status {
   margin: 0;
+  font-size: 14px;
 }
 
 .status-connected {
