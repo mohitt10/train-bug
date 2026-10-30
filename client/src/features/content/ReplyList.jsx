@@ -9,7 +9,8 @@ import { ErrorMessage } from './ErrorMessage';
 export function ReplyList({ commentId, onReplyCountChange }) {
   const { isLoggedIn } = useCurrentUser();
   const [replies, setReplies] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loadedCommentId, setLoadedCommentId] = useState(null);
+  const isLoading = loadedCommentId !== commentId;
   const [error, setError] = useState('');
 
   // New reply composer state
@@ -19,20 +20,19 @@ export function ReplyList({ commentId, onReplyCountChange }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    setIsLoading(true);
-    setError('');
 
     async function fetchReplies() {
       try {
         const data = await getReplies(commentId, { signal: controller.signal });
         setReplies(data.items || []);
+        setError('');
       } catch (err) {
         if (err.name !== 'AbortError') {
           setError(err.message || 'Could not load replies.');
         }
       } finally {
         if (!controller.signal.aborted) {
-          setIsLoading(false);
+          setLoadedCommentId(commentId);
         }
       }
     }
@@ -45,7 +45,7 @@ export function ReplyList({ commentId, onReplyCountChange }) {
   }, [commentId]);
 
   const handleRetry = () => {
-    setIsLoading(true);
+    setLoadedCommentId(null);
     setError('');
     getReplies(commentId)
       .then((data) => setReplies(data.items || []))
@@ -54,7 +54,7 @@ export function ReplyList({ commentId, onReplyCountChange }) {
           setError(err.message || 'Could not load replies.');
         }
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => setLoadedCommentId(commentId));
   };
 
   const handleCreateReply = async (e) => {

@@ -65,7 +65,7 @@ def delete_post_cascade(post_id: int, user_id: int):
         if report_check and report_check.get("has_reports"):
             return error_response(
                 "CONTENT_HAS_REPORTS",
-                "This content has been reported and cannot be deleted until a moderator reviews it.",
+                "This content has a retained report and cannot be deleted.",
                 409,
             )
 
@@ -166,12 +166,17 @@ def get_post(post_id: int):
             """
             SELECT p.post_id, p.user_id, p.title, p.content, p.location, p.created_at, p.updated_at,
                    u.username, u.display_name,
-                   (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id) AS comment_count
+                   (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id) AS comment_count,
+                   (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
+                   EXISTS (
+                       SELECT 1 FROM post_likes pl
+                       WHERE pl.post_id = p.post_id AND pl.user_id = %s
+                   ) AS liked_by_me
             FROM posts p
             JOIN users u ON p.user_id = u.user_id
             WHERE p.post_id = %s;
             """,
-            (post_id,),
+            (current_user_id(), post_id),
             action="post:get",
             fetch="one",
         )
@@ -238,12 +243,17 @@ def update_post(post_id: int):
                 """
                 SELECT p.post_id, p.user_id, p.title, p.content, p.location, p.created_at, p.updated_at,
                        u.username, u.display_name,
-                       (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id) AS comment_count
+                       (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id) AS comment_count,
+                       (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
+                       EXISTS (
+                           SELECT 1 FROM post_likes pl
+                           WHERE pl.post_id = p.post_id AND pl.user_id = %s
+                       ) AS liked_by_me
                 FROM posts p
                 JOIN users u ON p.user_id = u.user_id
                 WHERE p.post_id = %s;
                 """,
-                (post_id,),
+                (user_id, post_id),
                 action="post:get_updated",
                 fetch="one",
             )

@@ -12,6 +12,7 @@ import Login from './pages/Login.jsx'
 import Profile from './pages/Profile.jsx'
 import Register from './pages/Register.jsx'
 import { FeedPage } from './features/content/FeedPage.jsx'
+import { ModerationPage } from './features/content/ModerationPage.jsx'
 
 function NotFound() {
   return <p>Page not found.</p>
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="/users/:userId/followers" element={<ProtectedRoute><FollowList kind="followers" /></ProtectedRoute>} />
           <Route path="/users/:userId/following" element={<ProtectedRoute><FollowList kind="following" /></ProtectedRoute>} />
           <Route path="/settings/profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
+          <Route path="/moderation" element={<ProtectedRoute><ModerationPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

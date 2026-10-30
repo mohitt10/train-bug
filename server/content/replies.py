@@ -55,7 +55,7 @@ def delete_reply_cascade(reply_id: int, user_id: int):
         if report_check and report_check.get("has_reports"):
             return error_response(
                 "CONTENT_HAS_REPORTS",
-                "This content has been reported and cannot be deleted until a moderator reviews it.",
+                "This content has a retained report and cannot be deleted.",
                 409,
             )
 

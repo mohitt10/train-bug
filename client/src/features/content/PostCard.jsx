@@ -4,6 +4,8 @@ import { updatePost, deletePost } from '../../api/contentApi';
 import { formatRelativeTime, isEdited } from './timeUtils';
 import { ConfirmDelete } from './ConfirmDelete';
 import { CommentList } from './CommentList';
+import { LikeButton } from './LikeButton';
+import { ReportButton } from './ReportButton';
 
 export function PostCard({
   post,
@@ -205,6 +207,13 @@ export function PostCard({
       )}
 
       <footer className="post-footer">
+        <LikeButton
+          targetType="post"
+          targetId={post.post_id}
+          count={post.like_count}
+          liked={post.liked_by_me}
+        />
+        <ReportButton targetType="post" targetId={post.post_id} />
         <button
           type="button"
           className="btn-toggle-comments"

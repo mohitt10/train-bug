@@ -73,7 +73,7 @@ def _user_exists(user_id):
     row = execute_query(
         "SELECT user_id FROM users WHERE user_id = %s", (user_id,), fetch="one"
     )
-    return row is not None
+    return as_dict(row, ["user_id"]) is not None
 
 
 def _follow_counts(user_id):
@@ -209,7 +209,7 @@ def unfollow(user_id):
         (g.current_user_id, user_id),
         fetch="one",
     )
-    if row is None:
+    if as_dict(row, ["follower_id"]) is None:
         return error_response("NOT_FOLLOWING", "You do not follow this user.", 404)
     return success({"following": False, **_follow_counts(user_id)})
 

@@ -10,7 +10,8 @@ import { ErrorMessage } from './ErrorMessage';
 export function CommentList({ postId, onCommentCountChange }) {
   const { isLoggedIn } = useCurrentUser();
   const [comments, setComments] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loadedPostId, setLoadedPostId] = useState(null);
+  const isLoading = loadedPostId !== postId;
   const [error, setError] = useState('');
 
   // Comment composer state
@@ -20,20 +21,19 @@ export function CommentList({ postId, onCommentCountChange }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    setIsLoading(true);
-    setError('');
 
     async function fetchComments() {
       try {
         const data = await getComments(postId, { signal: controller.signal });
         setComments(data.items || []);
+        setError('');
       } catch (err) {
         if (err.name !== 'AbortError') {
           setError(err.message || 'Could not load comments.');
         }
       } finally {
         if (!controller.signal.aborted) {
-          setIsLoading(false);
+          setLoadedPostId(postId);
         }
       }
     }
@@ -46,7 +46,7 @@ export function CommentList({ postId, onCommentCountChange }) {
   }, [postId]);
 
   const handleRetry = () => {
-    setIsLoading(true);
+    setLoadedPostId(null);
     setError('');
     getComments(postId)
       .then((data) => setComments(data.items || []))
@@ -55,7 +55,7 @@ export function CommentList({ postId, onCommentCountChange }) {
           setError(err.message || 'Could not load comments.');
         }
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => setLoadedPostId(postId));
   };
 
   const handleCreateComment = async (e) => {

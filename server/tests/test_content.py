@@ -70,16 +70,28 @@ class TestContentEndpoints(unittest.TestCase):
     def test_phase2_session_auth_for_content(self, mock_posts_query, mock_auth_query):
         """A valid Phase 2 session authenticates content without a dev header."""
         self.app.config["SECRET_KEY"] = "test-session-secret"
-        mock_auth_query.return_value = (
-            1,
-            "alex_traveler",
-            "alex@example.com",
-            "Alex Mercer",
-            None,
-            "active",
-            datetime.now(timezone.utc),
-            datetime.now(timezone.utc),
-        )
+        mock_auth_query.return_value = {
+            "rows": (
+                1,
+                "alex_traveler",
+                "alex@example.com",
+                "Alex Mercer",
+                None,
+                "active",
+                datetime.now(timezone.utc),
+                datetime.now(timezone.utc),
+            ),
+            "columns": [
+                "user_id",
+                "username",
+                "email",
+                "display_name",
+                "bio",
+                "account_status",
+                "created_at",
+                "updated_at",
+            ],
+        }
         mock_posts_query.side_effect = [
             {
                 "post_id": 42,

@@ -5,6 +5,8 @@ import { formatRelativeTime, isEdited } from './timeUtils';
 import { EditableText } from './EditableText';
 import { ConfirmDelete } from './ConfirmDelete';
 import { ReplyList } from './ReplyList';
+import { LikeButton } from './LikeButton';
+import { ReportButton } from './ReportButton';
 
 export function CommentItem({ comment, onCommentUpdated, onCommentDeleted }) {
   const { user } = useCurrentUser();
@@ -111,6 +113,13 @@ export function CommentItem({ comment, onCommentUpdated, onCommentDeleted }) {
       )}
 
       <footer className="comment-footer">
+        <LikeButton
+          targetType="comment"
+          targetId={comment.comment_id}
+          count={comment.like_count}
+          liked={comment.liked_by_me}
+        />
+        <ReportButton targetType="comment" targetId={comment.comment_id} />
         <button
           type="button"
           className="btn-toggle-replies"

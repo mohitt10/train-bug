@@ -59,15 +59,18 @@ All errors return a standard JSON structure with the appropriate HTTP status cod
   1. The server queries the database for the record and its `user_id` inside `transaction()` using `SELECT ... FOR UPDATE` to prevent concurrency races.
   2. If the record does not exist: returns `404 Not Found`.
   3. If `record.user_id != current_user_id()`: returns `403 Forbidden` (`FORBIDDEN`).
-- **Deletion Policy with Reports (Phase 3 Default)**:
+- **Deletion Policy with Reports (Phase 4 decision)**:
   * Deletion checks whether any record in the `reports` table references the post, comment, or reply (or any nested comments/replies of the post).
-  * If reports exist, the delete operation is **aborted** and returns HTTP 409:
+  * If a report record exists, the delete operation is **aborted** and returns HTTP 409.
+    Reports are retained as moderation history, and the schema has restrictive foreign
+    keys to their target. Therefore, reported content remains undeletable even after a
+    report is reviewed; review does not erase the audit record:
     ```json
     {
       "status": "error",
       "error": {
         "code": "CONTENT_HAS_REPORTS",
-        "message": "This content has been reported and cannot be deleted until a moderator reviews it."
+        "message": "This content has a retained report and cannot be deleted."
       }
     }
     ```
@@ -77,6 +80,29 @@ All errors return a standard JSON structure with the appropriate HTTP status cod
     3. Delete child `replies`
     4. Delete child `comments`
     5. Delete `posts`
+
+Likes are supported for posts and comments only. No reply-like table or endpoint exists.
+`GET /api/feed`, user timelines, post detail, and comment lists include `like_count` and
+`liked_by_me`; POST/DELETE `/api/posts/<id>/like` and
+`/api/comments/<id>/like` update the current user's like.
+
+Authenticated users may submit `POST /api/reports` with `target_type` (`post`,
+`comment`, or `reply`), `target_id`, and a reason of 1–500 characters. The server
+derives reporter identity and selects exactly one target column. Reports start as
+`pending`; moderators may transition a pending report once to `resolved` or `dismissed`.
+Both outcomes are terminal. The reviewer's ID always comes from the authenticated
+moderator session. Reports are not deleted through the API.
+
+Moderator-only routes: `GET /api/moderation/me`,
+`GET /api/moderation/reports?status=pending|resolved|dismissed`,
+`GET /api/moderation/reports/<report_id>`, and
+`PATCH /api/moderation/reports/<report_id>` with `{"status":"resolved"}` or
+`{"status":"dismissed"}`.
+
+The moderator-only SQL inspector is available at `GET /api/query-inspector/queries`
+and `GET /api/query-inspector/queries/<query_id>`. It returns bounded in-memory query
+metadata and SQL templates, never SQL parameter values, and does not execute submitted
+SQL.
 
 ---
 

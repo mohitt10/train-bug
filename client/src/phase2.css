@@ -1,7 +1,7 @@
 /* Phase 2 styles. Neutral colours so they work in the template's light and dark modes. */
 #root {
   width: 100%;
-  max-width: 720px;
+  max-width: 1126px;
   margin: 0 auto;
   padding: 0 16px 48px;
   text-align: left;
@@ -14,10 +14,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 0;
+  padding: 14px 24px;
   border-bottom: 1px solid rgba(128, 128, 128, 0.35);
   margin-bottom: 24px;
 }
+.wl-nav nav { flex-wrap: wrap; justify-content: flex-end; }
 .wl-nav nav { display: flex; align-items: center; gap: 16px; }
 .wl-brand { font-weight: 700; font-size: 1.2rem; text-decoration: none; }
 

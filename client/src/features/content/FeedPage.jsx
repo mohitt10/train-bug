@@ -29,6 +29,7 @@ export function FeedPage() {
 
   // Track active fetch to cancel stale requests
   const activeControllerRef = useRef(null);
+  const nextCursorRef = useRef(null);
 
   const loadFeed = useCallback(async (reset = true) => {
     // Abort previous in-flight request
@@ -48,7 +49,7 @@ export function FeedPage() {
     }
 
     try {
-      const cursor = reset ? null : nextCursor;
+      const cursor = reset ? null : nextCursorRef.current;
       let data;
 
       if (authorFilter) {
@@ -67,6 +68,7 @@ export function FeedPage() {
         setPosts((prev) => [...prev, ...(data.items || [])]);
       }
       setNextCursor(data.next_cursor || null);
+      nextCursorRef.current = data.next_cursor || null;
     } catch (err) {
       if (err.name !== 'AbortError') {
         if (reset) {
@@ -81,16 +83,20 @@ export function FeedPage() {
         setIsLoadingMore(false);
       }
     }
-  }, [authorFilter, nextCursor]);
+  }, [authorFilter]);
 
   useEffect(() => {
-    loadFeed(true);
+    let active = true;
+    queueMicrotask(() => {
+      if (active) loadFeed(true);
+    });
     return () => {
+      active = false;
       if (activeControllerRef.current) {
         activeControllerRef.current.abort();
       }
     };
-  }, [authorFilter]); // Only re-run when authorFilter changes
+  }, [loadFeed]);
 
   const handlePostCreated = (newPost) => {
     // Only prepend if global feed or currently filtering by the author

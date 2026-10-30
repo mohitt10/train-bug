@@ -205,3 +205,19 @@ CREATE TABLE reports (
             (post_id IS NULL AND comment_id IS NULL AND reply_id IS NOT NULL)
         )
 );
+
+-- Query-supporting indexes for feed, timelines, likes, and moderation.
+CREATE INDEX IF NOT EXISTS idx_posts_user_created
+    ON posts (user_id, created_at DESC, post_id DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_post_created
+    ON comments (post_id, created_at, comment_id);
+CREATE INDEX IF NOT EXISTS idx_replies_comment_created
+    ON replies (comment_id, created_at, reply_id);
+CREATE INDEX IF NOT EXISTS idx_follows_following_follower
+    ON follows (following_id, follower_id);
+CREATE INDEX IF NOT EXISTS idx_post_likes_post
+    ON post_likes (post_id);
+CREATE INDEX IF NOT EXISTS idx_comment_likes_comment
+    ON comment_likes (comment_id);
+CREATE INDEX IF NOT EXISTS idx_reports_status_created
+    ON reports (status, created_at DESC, report_id DESC);

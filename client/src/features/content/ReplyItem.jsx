@@ -4,6 +4,7 @@ import { updateReply, deleteReply } from '../../api/contentApi';
 import { formatRelativeTime, isEdited } from './timeUtils';
 import { EditableText } from './EditableText';
 import { ConfirmDelete } from './ConfirmDelete';
+import { ReportButton } from './ReportButton';
 
 export function ReplyItem({ reply, onReplyUpdated, onReplyDeleted }) {
   const { user } = useCurrentUser();
@@ -102,6 +103,10 @@ export function ReplyItem({ reply, onReplyUpdated, onReplyDeleted }) {
       ) : (
         <p className="content-body text-reply">{reply.content}</p>
       )}
+
+      <footer className="reply-footer">
+        <ReportButton targetType="reply" targetId={reply.reply_id} />
+      </footer>
 
       <ConfirmDelete
         isOpen={showConfirm}

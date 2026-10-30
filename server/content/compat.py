@@ -67,6 +67,9 @@ def current_user_id() -> Optional[int]:
     session_user_id = getattr(g, "current_user_id", None)
     if session_user_id is not None:
         return session_user_id
+    session_user_id = session.get("user_id")
+    if session_user_id is not None:
+        return session_user_id
 
     if hasattr(g, "_cached_user_id"):
         return g._cached_user_id

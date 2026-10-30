@@ -29,12 +29,17 @@ def json_body():
 def as_dict(row, columns):
     """Turn a DB row into a JSON-safe dict.
 
-    Works whether execute_query() returns dict-like rows (e.g. RealDictCursor)
-    or plain tuples; for tuples, `columns` must match the SELECT order.
+    Accepts the shared execute_query result envelope, dict-like rows, or plain
+    tuples; for tuples, `columns` must match the SELECT order.
     Datetimes become ISO-8601 strings.
     """
     if row is None:
         return None
+    if isinstance(row, Mapping) and "rows" in row:
+        columns = row.get("columns") or columns
+        row = row.get("rows")
+        if row is None:
+            return None
     data = dict(row) if isinstance(row, Mapping) else dict(zip(columns, row))
     return {
         key: (value.isoformat() if hasattr(value, "isoformat") else value)
@@ -43,6 +48,9 @@ def as_dict(row, columns):
 
 
 def as_dicts(rows, columns):
+    if isinstance(rows, Mapping) and "rows" in rows:
+        columns = rows.get("columns") or columns
+        rows = rows.get("rows")
     return [as_dict(row, columns) for row in (rows or [])]
 
 

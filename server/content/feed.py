@@ -1,7 +1,7 @@
 import psycopg
 from flask import Blueprint, current_app, jsonify, request
 
-from .compat import map_db_error, run_query
+from .compat import current_user_id, map_db_error, run_query
 from .responses import error_response
 from .serializers import encode_cursor, serialize_author, serialize_post
 from .validators import validate_pagination_params
@@ -23,7 +23,7 @@ def get_feed():
     if err:
         return error_response("INVALID_PAGINATION", err, 400)
 
-    params = []
+    params = [current_user_id()]
     where_clause = ""
 
     if cursor_tuple:
@@ -38,7 +38,12 @@ def get_feed():
     sql = f"""
         SELECT p.post_id, p.user_id, p.title, p.content, p.location, p.created_at, p.updated_at,
                u.username, u.display_name,
-               (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id) AS comment_count
+               (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id) AS comment_count,
+               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
+               EXISTS (
+                   SELECT 1 FROM post_likes pl
+                   WHERE pl.post_id = p.post_id AND pl.user_id = %s
+               ) AS liked_by_me
         FROM posts p
         JOIN users u ON p.user_id = u.user_id
         {where_clause}
@@ -93,7 +98,7 @@ def get_user_posts(user_id: int):
         if not user_row:
             return error_response("NOT_FOUND", "User not found.", 404)
 
-        params = [user_id]
+        params = [current_user_id(), user_id]
         cursor_clause = ""
 
         if cursor_tuple:
@@ -107,7 +112,12 @@ def get_user_posts(user_id: int):
         sql = f"""
             SELECT p.post_id, p.user_id, p.title, p.content, p.location, p.created_at, p.updated_at,
                    u.username, u.display_name,
-                   (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id) AS comment_count
+                   (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id) AS comment_count,
+                   (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
+                   EXISTS (
+                       SELECT 1 FROM post_likes pl
+                       WHERE pl.post_id = p.post_id AND pl.user_id = %s
+                   ) AS liked_by_me
             FROM posts p
             JOIN users u ON p.user_id = u.user_id
             WHERE p.user_id = %s

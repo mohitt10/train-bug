@@ -61,6 +61,8 @@ It creates the following nine tables:
 9. `reports`
 
 The schema includes the primary keys, foreign keys, unique constraints, composite keys, and CHECK constraints specified by the relational design.
+It also creates query-supporting indexes for timelines, threaded content, likes, follows,
+and report queues.
 
 To initialize an empty database:
 
@@ -103,6 +105,27 @@ The history is limited to 500 entries. Older entries are discarded when the limi
 Query history is not persisted in PostgreSQL and is lost when the application process restarts.
 
 SQL parameter values are not recorded.
+
+The SQL Inspector is moderator-only. It exposes captured SQL templates and safe
+execution metadata, not query parameter values. History is process-local, bounded, and
+is not shared between multiple server workers.
+
+## 10. Moderators and report policy
+
+Moderator accounts are provisioned only by an operator with trusted server access; there
+is no public endpoint that can grant moderator privileges. After registering the
+account, run from `server/`:
+
+```bash
+python manage_moderators.py <username>
+```
+
+Reports use `pending`, `resolved`, and `dismissed` states. A pending report may be
+reviewed once into either terminal state. The API sets `reviewed_by` from the
+authenticated moderator and retains report rows. Because report-target foreign keys are
+restrictive and history is retained, content with any report cannot be deleted, even
+after review. Unreported owned content can be deleted under the existing FK-safe
+cascade policy.
 
 ## 8. Health Checks
 

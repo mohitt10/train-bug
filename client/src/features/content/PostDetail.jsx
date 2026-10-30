@@ -6,25 +6,25 @@ import { ErrorMessage } from './ErrorMessage';
 
 export function PostDetail({ postId, onBack, onPostUpdated, onPostDeleted, onCommentCountChange }) {
   const [post, setPost] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loadedPostId, setLoadedPostId] = useState(null);
+  const isLoading = loadedPostId !== postId;
   const [error, setError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
-    setIsLoading(true);
-    setError('');
 
     async function fetchPost() {
       try {
         const data = await getPost(postId, { signal: controller.signal });
         setPost(data);
+        setError('');
       } catch (err) {
         if (err.name !== 'AbortError') {
           setError(err.message || 'Could not load post details.');
         }
       } finally {
         if (!controller.signal.aborted) {
-          setIsLoading(false);
+          setLoadedPostId(postId);
         }
       }
     }
@@ -37,7 +37,7 @@ export function PostDetail({ postId, onBack, onPostUpdated, onPostDeleted, onCom
   }, [postId]);
 
   const handleRetry = () => {
-    setIsLoading(true);
+    setLoadedPostId(null);
     setError('');
     getPost(postId)
       .then((data) => setPost(data))
@@ -46,7 +46,7 @@ export function PostDetail({ postId, onBack, onPostUpdated, onPostDeleted, onCom
           setError(err.message || 'Could not load post details.');
         }
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => setLoadedPostId(postId));
   };
 
   const handleUpdated = (updated) => {

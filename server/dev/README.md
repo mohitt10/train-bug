@@ -45,7 +45,7 @@ FLASK_SECRET_KEY=dev_secret_key_123
 DATABASE_URL=postgresql://wanderlog_user:replace-with-password@localhost:5432/wanderlog_db
 QUERY_HISTORY_LIMIT=500
 
-# Enable dev auth simulation header (X-Dev-User-Id)
+# Optional local-only dev auth simulation header (X-Dev-User-Id)
 ALLOW_DEV_AUTH=1
 ```
 
@@ -66,7 +66,9 @@ The server starts on `http://127.0.0.1:5000`.
 
 ## 5. Testing with Simulated Auth
 
-With `ALLOW_DEV_AUTH=1`, requests with `X-Dev-User-Id` will authenticate as that user if they exist in the `users` table:
+Normal application sign-in uses Phase 2's signed session cookie. With
+`ALLOW_DEV_AUTH=1`, local content smoke-test requests may instead use
+`X-Dev-User-Id` if that user exists in the `users` table:
 
 ```bash
 # Create a post as User 1 (Alex Mercer):
@@ -78,3 +80,6 @@ curl -X POST http://127.0.0.1:5000/api/posts \
 # Fetch the global feed:
 curl http://127.0.0.1:5000/api/feed
 ```
+
+For the full Phase 4 flow (real sessions, likes, reports, moderation, and the query
+inspector), see [docs/phase4-final-demo.md](../../docs/phase4-final-demo.md).

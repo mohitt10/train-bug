@@ -40,6 +40,8 @@ def serialize_post(row: Dict[str, Any]) -> Dict[str, Any]:
         "created_at": _format_datetime(row.get("created_at")),
         "updated_at": _format_datetime(row.get("updated_at")),
         "comment_count": int(row.get("comment_count", 0) or 0),
+        "like_count": int(row.get("like_count", 0) or 0),
+        "liked_by_me": bool(row.get("liked_by_me", False)),
         "username": row.get("username"),
         "display_name": row.get("display_name"),
         "author": serialize_author(row),
@@ -56,6 +58,8 @@ def serialize_comment(row: Dict[str, Any]) -> Dict[str, Any]:
         "created_at": _format_datetime(row.get("created_at")),
         "updated_at": _format_datetime(row.get("updated_at")),
         "reply_count": int(row.get("reply_count", 0) or 0),
+        "like_count": int(row.get("like_count", 0) or 0),
+        "liked_by_me": bool(row.get("liked_by_me", False)),
         "username": row.get("username"),
         "display_name": row.get("display_name"),
         "author": serialize_author(row),
@@ -74,4 +78,11 @@ def serialize_reply(row: Dict[str, Any]) -> Dict[str, Any]:
         "username": row.get("username"),
         "display_name": row.get("display_name"),
         "author": serialize_author(row),
+    }
+
+
+def serialize_like_summary(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    return {
+        "like_count": int((row or {}).get("like_count", 0) or 0),
+        "liked_by_me": bool((row or {}).get("liked_by_me", False)),
     }

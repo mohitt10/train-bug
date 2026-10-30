@@ -174,3 +174,42 @@ export async function deleteReply(replyId, options = {}) {
     ...options,
   });
 }
+
+export async function likeResource(type, id) {
+  return request(`/${type}s/${id}/like`, { method: 'POST' });
+}
+
+export async function unlikeResource(type, id) {
+  return request(`/${type}s/${id}/like`, { method: 'DELETE' });
+}
+
+export async function reportResource(targetType, targetId, reason) {
+  return request('/reports', {
+    method: 'POST',
+    body: { target_type: targetType, target_id: targetId, reason },
+  });
+}
+
+export async function getModerator() {
+  return request('/moderation/me', { method: 'GET' });
+}
+
+export async function getModerationReports(status = 'pending', options = {}) {
+  const params = new URLSearchParams({ status });
+  return request(`/moderation/reports?${params}`, { method: 'GET', ...options });
+}
+
+export async function reviewReport(reportId, status) {
+  return request(`/moderation/reports/${reportId}`, {
+    method: 'PATCH',
+    body: { status },
+  });
+}
+
+export async function getQueryHistory(filters = {}, options = {}) {
+  const params = new URLSearchParams({ limit: '100' });
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value);
+  }
+  return request(`/query-inspector/queries?${params}`, { method: 'GET', ...options });
+}

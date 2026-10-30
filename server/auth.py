@@ -21,7 +21,7 @@ from functools import wraps
 from flask import Blueprint, g, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from api_utils import as_dict, db_error_kind, error_response, json_body, success
+from api_utils import as_dict, as_dicts, db_error_kind, error_response, json_body, success
 from db import execute_query
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -120,12 +120,13 @@ def register():
 
     # Friendly duplicate check. The UNIQUE constraints remain the real guarantee
     # (see the IntegrityError handling below for the race-condition case).
-    existing = execute_query(
+    existing_rows = execute_query(
         "SELECT username, email FROM users "
         "WHERE LOWER(username) = LOWER(%s) OR email = %s",
         (data["username"], data["email"]),
         fetch="all",
     )
+    existing = as_dicts(existing_rows, ["username", "email"])
     for row in existing or []:
         row = as_dict(row, ["username", "email"])
         if row["username"].lower() == data["username"].lower():

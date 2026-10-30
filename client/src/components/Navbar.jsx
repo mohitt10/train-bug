@@ -17,6 +17,7 @@ export default function Navbar() {
         {loading ? null : user ? (
           <>
             <Link to={`/users/${user.user_id}`}>@{user.username}</Link>
+            <Link to="/moderation">Moderation</Link>
             <button type="button" className="wl-btn wl-btn-quiet" onClick={handleLogout}>
               Log out
             </button>

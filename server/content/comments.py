@@ -59,7 +59,7 @@ def delete_comment_cascade(comment_id: int, user_id: int):
         if report_check and report_check.get("has_reports"):
             return error_response(
                 "CONTENT_HAS_REPORTS",
-                "This content has been reported and cannot be deleted until a moderator reviews it.",
+                "This content has a retained report and cannot be deleted.",
                 409,
             )
 
@@ -107,13 +107,18 @@ def get_post_comments(post_id: int):
             """
             SELECT c.comment_id, c.user_id, c.post_id, c.content, c.created_at, c.updated_at,
                    u.username, u.display_name,
-                   (SELECT COUNT(*) FROM replies r WHERE r.comment_id = c.comment_id) AS reply_count
+                   (SELECT COUNT(*) FROM replies r WHERE r.comment_id = c.comment_id) AS reply_count,
+                   (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.comment_id) AS like_count,
+                   EXISTS (
+                       SELECT 1 FROM comment_likes cl
+                       WHERE cl.comment_id = c.comment_id AND cl.user_id = %s
+                   ) AS liked_by_me
             FROM comments c
             JOIN users u ON c.user_id = u.user_id
             WHERE c.post_id = %s
             ORDER BY c.created_at ASC, c.comment_id ASC;
             """,
-            (post_id,),
+            (current_user_id(), post_id),
             action="comment:list",
             fetch="all",
         )
@@ -229,12 +234,17 @@ def update_comment(comment_id: int):
                 """
                 SELECT c.comment_id, c.user_id, c.post_id, c.content, c.created_at, c.updated_at,
                        u.username, u.display_name,
-                       (SELECT COUNT(*) FROM replies r WHERE r.comment_id = c.comment_id) AS reply_count
+                       (SELECT COUNT(*) FROM replies r WHERE r.comment_id = c.comment_id) AS reply_count,
+                       (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.comment_id) AS like_count,
+                       EXISTS (
+                           SELECT 1 FROM comment_likes cl
+                           WHERE cl.comment_id = c.comment_id AND cl.user_id = %s
+                       ) AS liked_by_me
                 FROM comments c
                 JOIN users u ON c.user_id = u.user_id
                 WHERE c.comment_id = %s;
                 """,
-                (comment_id,),
+                (user_id, comment_id),
                 action="comment:get_updated",
                 fetch="one",
             )
