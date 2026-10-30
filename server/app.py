@@ -2,10 +2,12 @@ from uuid import uuid4
 from flask import Flask, g, jsonify
 from config import Config
 from db import execute_query
+from content import content_bp
 
 
 app = Flask(__name__)
 app.config.from_object(Config)
+app.register_blueprint(content_bp)
 
 
 @app.before_request
