@@ -1,55 +1,57 @@
-# Phase 3 Local Dev Database & Testing Guide
+# WanderLog Development Database & Setup Guide
 
-> **Note:** DEV ONLY. The real schema and initialization belong to Phase 1. Do not merge this dev setup into the final database setup.
-
-This directory contains standalone database initialization and seed data to develop and test Phase 3 features (Posts, Comments, Replies, Feed) independently of Phases 1 and 2.
+This guide describes how to initialize your PostgreSQL database with the official schema and development seed data for Phase 3.
 
 ---
 
-## 1. Setup Local PostgreSQL Database
+## 1. Create Local Database
 
-Create a local database for WanderLog (if not already created):
-
-```bash
-# Using psql:
-createdb wanderlog
-# Or within psql:
-# CREATE DATABASE wanderlog;
-```
-
-Load the Phase 3 standalone development schema and seed records:
+Create the PostgreSQL database as specified in `server/.env.example` (`wanderlog_db`):
 
 ```bash
-psql -d wanderlog -f server/dev/phase3_dev_schema.sql
+createdb wanderlog_db
+# Or inside psql:
+# CREATE DATABASE wanderlog_db;
 ```
-
-This creates the 4 core content tables (`users`, `posts`, `comments`, `replies`) and populates seed users and posts:
-* User 1: `alex_traveler` (Alex Mercer)
-* User 2: `sarah_journeys` (Sarah Jenkins)
-* User 3: `dan_nomad` (Dan Reynolds)
-* User 4: `nomad_priya` (Priya Sharma)
 
 ---
 
-## 2. Configure Environment Variables
+## 2. Apply Schema & Seed Data
 
-Create or update `server/.env`:
+Run the official Phase 1 database schema first, followed by the safe development seed data:
+
+```bash
+# 1. Apply authoritative schema (all 9 tables, constraints, indexes)
+psql -d wanderlog_db -f server/schema.sql
+
+# 2. Insert dev seed data (users, sample posts, comments, replies)
+psql -d wanderlog_db -f server/dev/seed_dev_data.sql
+```
+
+The seed script creates 4 seed travelers:
+1. `alex_traveler` — Alex Mercer
+2. `sarah_journeys` — Sarah Jenkins
+3. `dan_nomad` — Dan Reynolds
+4. `priya_wander` — Priya Sharma
+
+---
+
+## 3. Configure Environment Variables
+
+In `server/.env`:
 
 ```env
 FLASK_SECRET_KEY=dev_secret_key_123
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/wanderlog
+DATABASE_URL=postgresql://wanderlog_user:replace-with-password@localhost:5432/wanderlog_db
+QUERY_HISTORY_LIMIT=500
 
-# Or separate connection parameters:
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=wanderlog
-DB_USER=postgres
-DB_PASSWORD=postgres
+# Enable dev auth simulation header (X-Dev-User-Id)
+ALLOW_DEV_AUTH=1
 ```
 
 ---
 
-## 3. Run the Flask Server
+## 4. Run the Server
 
 From the `server` directory:
 
@@ -62,9 +64,9 @@ The server starts on `http://127.0.0.1:5000`.
 
 ---
 
-## 4. Testing Phase 3 Authenticated Requests
+## 5. Testing with Simulated Auth
 
-Because Phase 2 authentication is being developed concurrently by another team member, Phase 3 uses a **dev stub** in `server/content/compat.py` which inspects the `X-Dev-User-Id` header:
+With `ALLOW_DEV_AUTH=1`, requests with `X-Dev-User-Id` will authenticate as that user if they exist in the `users` table:
 
 ```bash
 # Create a post as User 1 (Alex Mercer):

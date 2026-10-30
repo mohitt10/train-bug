@@ -130,10 +130,10 @@ def validate_pagination_params(
     cursor_raw: Optional[str],
     default_limit: int = 20,
     max_limit: int = 50,
-) -> Tuple[int, Optional[Tuple[str, int]], Optional[str]]:
+) -> Tuple[int, Optional[Tuple[datetime, int]], Optional[str]]:
     """
     Validates pagination query parameters:
-    Returns (limit, cursor_tuple=(created_at_iso, post_id), error_message).
+    Returns (limit, cursor_tuple=(parsed_datetime, post_id), error_message).
     """
     limit = default_limit
     if limit_raw is not None:
@@ -153,17 +153,26 @@ def validate_pagination_params(
         decoded_bytes = base64.urlsafe_b64decode(cursor_raw.encode("utf-8"))
         payload = json.loads(decoded_bytes.decode("utf-8"))
         if not isinstance(payload, dict):
-            return limit, None, "Malformed cursor format."
+            return limit, None, "Invalid pagination cursor."
 
         created_at_str = payload.get("c")
         post_id = payload.get("id")
 
-        if not created_at_str or not isinstance(post_id, int):
-            return limit, None, "Invalid cursor fields."
+        # Reject booleans (isinstance(True, int) is True in Python) and non-ints
+        if isinstance(post_id, bool) or not isinstance(post_id, int):
+            return limit, None, "Invalid pagination cursor."
 
-        # Validate timestamp parseability
-        # Note: Accepts standard ISO strings with or without tz
-        return limit, (created_at_str, post_id), None
+        if post_id < 1 or post_id > 2147483647:
+            return limit, None, "Invalid pagination cursor."
+
+        if not isinstance(created_at_str, str) or not created_at_str:
+            return limit, None, "Invalid pagination cursor."
+
+        # Parse ISO-8601 timestamp (accept trailing 'Z')
+        normalized_ts = created_at_str.replace("Z", "+00:00")
+        parsed_dt = datetime.fromisoformat(normalized_ts)
+
+        return limit, (parsed_dt, post_id), None
 
     except Exception:
         return limit, None, "Invalid pagination cursor."

@@ -1,6 +1,8 @@
-from flask import Blueprint, jsonify, request
+import psycopg
+from flask import Blueprint, current_app, jsonify, request
 
 from .compat import map_db_error, run_query
+from .responses import error_response
 from .serializers import encode_cursor, serialize_author, serialize_post
 from .validators import validate_pagination_params
 
@@ -19,15 +21,15 @@ def get_feed():
 
     limit, cursor_tuple, err = validate_pagination_params(limit_raw, cursor_raw)
     if err:
-        return jsonify({"error": {"code": "INVALID_PAGINATION", "message": err}}), 400
+        return error_response("INVALID_PAGINATION", err, 400)
 
     params = []
     where_clause = ""
 
     if cursor_tuple:
-        created_at_cursor, post_id_cursor = cursor_tuple
+        created_at_dt, post_id_cursor = cursor_tuple
         where_clause = "WHERE (p.created_at < %s) OR (p.created_at = %s AND p.post_id < %s)"
-        params.extend([created_at_cursor, created_at_cursor, post_id_cursor])
+        params.extend([created_at_dt, created_at_dt, post_id_cursor])
 
     # Fetch limit + 1 to check if another page exists
     fetch_limit = limit + 1
@@ -60,9 +62,13 @@ def get_feed():
             "next_cursor": next_cursor,
         }), 200
 
-    except Exception as exc:
+    except psycopg.Error as exc:
+        current_app.logger.warning("Database error in get_feed (SQLSTATE %s)", getattr(exc, "sqlstate", None))
         status, msg = map_db_error(exc)
-        return jsonify({"error": {"code": "DATABASE_ERROR", "message": msg}}), status
+        return error_response("DATABASE_ERROR", msg, status)
+    except Exception as exc:
+        current_app.logger.exception("Unexpected error in get_feed: %s", exc)
+        return error_response("INTERNAL_ERROR", "Unexpected server error.", 500)
 
 
 @feed_bp.get("/users/<int:user_id>/posts")
@@ -75,10 +81,9 @@ def get_user_posts(user_id: int):
 
     limit, cursor_tuple, err = validate_pagination_params(limit_raw, cursor_raw)
     if err:
-        return jsonify({"error": {"code": "INVALID_PAGINATION", "message": err}}), 400
+        return error_response("INVALID_PAGINATION", err, 400)
 
     try:
-        # Check user existence
         user_row = run_query(
             "SELECT user_id, username, display_name FROM users WHERE user_id = %s;",
             (user_id,),
@@ -86,15 +91,15 @@ def get_user_posts(user_id: int):
             fetch="one",
         )
         if not user_row:
-            return jsonify({"error": {"code": "NOT_FOUND", "message": "User not found."}}), 404
+            return error_response("NOT_FOUND", "User not found.", 404)
 
         params = [user_id]
         cursor_clause = ""
 
         if cursor_tuple:
-            created_at_cursor, post_id_cursor = cursor_tuple
+            created_at_dt, post_id_cursor = cursor_tuple
             cursor_clause = "AND ((p.created_at < %s) OR (p.created_at = %s AND p.post_id < %s))"
-            params.extend([created_at_cursor, created_at_cursor, post_id_cursor])
+            params.extend([created_at_dt, created_at_dt, post_id_cursor])
 
         fetch_limit = limit + 1
         params.append(fetch_limit)
@@ -127,6 +132,10 @@ def get_user_posts(user_id: int):
             "user": serialize_author(user_row),
         }), 200
 
-    except Exception as exc:
+    except psycopg.Error as exc:
+        current_app.logger.warning("Database error in get_user_posts (SQLSTATE %s)", getattr(exc, "sqlstate", None))
         status, msg = map_db_error(exc)
-        return jsonify({"error": {"code": "DATABASE_ERROR", "message": msg}}), status
+        return error_response("DATABASE_ERROR", msg, status)
+    except Exception as exc:
+        current_app.logger.exception("Unexpected error in get_user_posts: %s", exc)
+        return error_response("INTERNAL_ERROR", "Unexpected server error.", 500)
