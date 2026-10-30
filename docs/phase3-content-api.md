@@ -16,6 +16,7 @@ All errors return a standard JSON structure with the appropriate HTTP status cod
 
 ```json
 {
+  "status": "error",
   "error": {
     "code": "VALIDATION_ERROR",
     "message": "Post content cannot be empty."
@@ -29,11 +30,11 @@ All errors return a standard JSON structure with the appropriate HTTP status cod
 | `200 OK` | Success | Successful resource retrieval or update |
 | `201 Created` | Created | Successful resource creation (`posts`, `comments`, `replies`) |
 | `204 No Content` | No Content | Successful resource deletion |
-| `400 Bad Request` | Bad Request | Validation errors (empty text, limit exceeded, malformed JSON) |
+| `400 Bad Request` | Bad Request | Validation errors (empty text, limit exceeded, malformed JSON, invalid cursor) |
 | `401 Unauthorized` | Unauthorized | Unauthenticated request on protected route |
 | `403 Forbidden` | Forbidden | Attempt to edit or delete content owned by another user |
 | `404 Not Found` | Not Found | Resource or parent resource does not exist |
-| `409 Conflict` | Conflict | Database unique constraint violation |
+| `409 Conflict` | Conflict | Database unique constraint violation, concurrency conflict, or reported content deletion lock |
 | `500 Server Error` | Server Error | Unhandled server or database exception (safe error message) |
 
 ---
@@ -45,19 +46,37 @@ All errors return a standard JSON structure with the appropriate HTTP status cod
 | **Post** | `title` | Optional; string; max 200 characters; nullable |
 | **Post** | `content` | **Required**; non-empty after trim; **NO length limit** (stored as `TEXT` in DB) |
 | **Post** | `location` | Optional; string; max 100 characters; nullable |
+| **Post** | `updated_at` | Stays `NULL` on creation. The UI interprets `NULL` as "not edited". |
 | **Comment** | `content` | **Required**; non-empty after trim; **max 2,000 characters** (`VARCHAR(2000)`) |
 | **Reply** | `content` | **Required**; non-empty after trim; **max 2,000 characters** (`VARCHAR(2000)`) |
 
 ---
 
-## 3. Ownership & Authorization Rules
+## 3. Ownership & Deletion Policy
 
-- **Author attribution**: The server derives `user_id` strictly from authenticated session/header (`current_user_id()`), **never** from the request body.
+- **Author attribution**: The server derives `user_id` strictly from authenticated context (`current_user_id()`), **never** from the request body.
 - **Backend enforcement**: On `PATCH` and `DELETE` requests:
-  1. The server queries the database for the record and its `user_id`.
+  1. The server queries the database for the record and its `user_id` inside `transaction()` using `SELECT ... FOR UPDATE` to prevent concurrency races.
   2. If the record does not exist: returns `404 Not Found`.
-  3. If `record.user_id != current_user_id()`: returns `403 Forbidden` (`FORBIDDEN`, `"You do not have permission to edit/delete this item"`).
-  4. Only the authenticated owner can modify or remove their content.
+  3. If `record.user_id != current_user_id()`: returns `403 Forbidden` (`FORBIDDEN`).
+- **Deletion Policy with Reports (Phase 3 Default)**:
+  * Deletion checks whether any record in the `reports` table references the post, comment, or reply (or any nested comments/replies of the post).
+  * If reports exist, the delete operation is **aborted** and returns HTTP 409:
+    ```json
+    {
+      "status": "error",
+      "error": {
+        "code": "CONTENT_HAS_REPORTS",
+        "message": "This content has been reported and cannot be deleted until a moderator reviews it."
+      }
+    }
+    ```
+  * If no reports exist, cascading deletion proceeds in strict foreign key dependency order:
+    1. Delete child `comment_likes`
+    2. Delete child `post_likes`
+    3. Delete child `replies`
+    4. Delete child `comments`
+    5. Delete `posts`
 
 ---
 
@@ -135,31 +154,21 @@ Creates a new post authored by the authenticated user.
   "location": "Shimla"
 }
 ```
-- **Response (201 Created)**:
-```json
-{
-  "post_id": 2,
-  "user_id": 1,
-  "title": "Narrow Gauge Railway",
-  "content": "Rode the mountain train across 102 tunnels today.",
-  "location": "Shimla",
-  "created_at": "2026-10-30T10:00:00+00:00",
-  "updated_at": null,
-  "comment_count": 0,
-  "username": "alex_traveler",
-  "display_name": "Alex Mercer",
-  "author": {
-    "user_id": 1,
-    "username": "alex_traveler",
-    "display_name": "Alex Mercer"
-  }
-}
-```
+- **Response (201 Created)**: Serialized post object.
 
 #### `GET /api/posts/<post_id>`
 Retrieves a single post and its metadata.
-- **Response (200 OK)**: Same structure as single item in feed.
-- **Response (404 Not Found)**: `{"error": {"code": "NOT_FOUND", "message": "Post not found."}}`
+- **Response (200 OK)**: Serialized post object.
+- **Response (404 Not Found)**:
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Post not found."
+  }
+}
+```
 
 #### `PATCH /api/posts/<post_id>`
 Updates an owned post's `title`, `content`, or `location`.
@@ -176,10 +185,11 @@ Updates an owned post's `title`, `content`, or `location`.
 - **Response (403 Forbidden)**: If requester is not the author.
 
 #### `DELETE /api/posts/<post_id>`
-Deletes an owned post and cascades delete to comments and replies.
+Deletes an owned post, its likes, comments, and replies.
 - **Headers**: Authenticated credentials / `X-Dev-User-Id`
 - **Response (204 No Content)**: Empty body.
 - **Response (403 Forbidden)**: If requester is not the author.
+- **Response (409 Conflict)**: If post or its comments/replies have reports.
 
 ---
 
@@ -220,6 +230,7 @@ Adds a comment to a post (max 2,000 characters).
 }
 ```
 - **Response (201 Created)**: Serialized comment object.
+- **Response (404 Not Found)**: If target post does not exist (or was deleted).
 
 #### `PATCH /api/comments/<comment_id>`
 Edits an owned comment.
@@ -227,8 +238,9 @@ Edits an owned comment.
 - **Response (200 OK)**: Serialized comment object.
 
 #### `DELETE /api/comments/<comment_id>`
-Deletes an owned comment and its nested replies.
+Deletes an owned comment and its nested replies and likes.
 - **Response (204 No Content)**: Empty body.
+- **Response (409 Conflict)**: If comment or its replies have reports.
 
 ---
 
@@ -263,6 +275,7 @@ Retrieves chronological replies under a comment.
 Adds a reply to a comment (max 2,000 characters).
 - **Request Body**: `{"content": "Glad you enjoyed the climb!"}`
 - **Response (201 Created)**: Serialized reply object.
+- **Response (404 Not Found)**: If target comment does not exist.
 
 #### `PATCH /api/replies/<reply_id>`
 Edits an owned reply.
@@ -272,24 +285,28 @@ Edits an owned reply.
 #### `DELETE /api/replies/<reply_id>`
 Deletes an owned reply.
 - **Response (204 No Content)**: Empty body.
+- **Response (409 Conflict)**: If reply has reports.
 
 ---
 
 ## 6. Complete SQL Actions Reference
 
-Every database query routes through `compat.run_query` with a descriptive `action` label to feed Phase 1's query capture and Phase 4's SQL Query Inspector:
+Every database query executes through `server.db.execute_query` with a descriptive action label captured in Phase 1 query monitoring:
 
 | Action Label | SQL Operation | Target Tables | Purpose |
 |:---|:---|:---|:---|
 | `feed:list` | `SELECT` | `posts`, `users`, `comments` | Retrieve paginated global feed with author JOINs & comment counts |
 | `feed:user_posts` | `SELECT` | `posts`, `users`, `comments` | Retrieve paginated timeline for a single user |
 | `user:exists` | `SELECT` | `users` | Verify user existence for user timeline |
+| `auth:dev_user_lookup` | `SELECT` | `users` | Verify dev user existence in simulated auth |
 | `post:create` | `INSERT` | `posts` | Insert new post record with `CURRENT_TIMESTAMP` |
 | `post:author_info` | `SELECT` | `users` | Fetch author details for new post |
 | `post:get` | `SELECT` | `posts`, `users`, `comments` | Read single post with author JOIN & comment count |
-| `post:get_owner` | `SELECT` | `posts` | Check post ownership before `PATCH` or `DELETE` |
-| `post:update` | `UPDATE` | `posts` | Update post `title`, `content`, `location`, `updated_at` |
-| `post:get_updated` | `SELECT` | `posts`, `users`, `comments` | Fetch post after update with fresh author metadata |
+| `post:get_owner` | `SELECT` | `posts` | Check post ownership with `FOR UPDATE` before `PATCH` |
+| `post:get_owner_for_delete` | `SELECT` | `posts` | Check post ownership with `FOR UPDATE` before `DELETE` |
+| `post:check_reports` | `SELECT` | `reports`, `comments`, `replies` | Check if post or its comments/replies have reports before delete |
+| `post:delete_likes` | `DELETE` | `post_likes` | Cascade delete post likes |
+| `comment:delete_likes` | `DELETE` | `comment_likes` | Cascade delete comment likes |
 | `post:delete_replies` | `DELETE` | `replies`, `comments` | Cascade delete replies of comments on post |
 | `post:delete_comments` | `DELETE` | `comments` | Cascade delete comments on post |
 | `post:delete` | `DELETE` | `posts` | Delete post record |
@@ -297,7 +314,9 @@ Every database query routes through `compat.run_query` with a descriptive `actio
 | `comment:list` | `SELECT` | `comments`, `users`, `replies` | List comments for a post with author JOINs & reply counts |
 | `comment:create` | `INSERT` | `comments` | Insert comment on post |
 | `comment:author_info`| `SELECT` | `users` | Fetch author details for new comment |
-| `comment:get_owner` | `SELECT` | `comments` | Check comment ownership before `PATCH` or `DELETE` |
+| `comment:get_owner` | `SELECT` | `comments` | Check comment ownership with `FOR UPDATE` before `PATCH` |
+| `comment:get_owner_for_delete` | `SELECT` | `comments` | Check comment ownership with `FOR UPDATE` before `DELETE` |
+| `comment:check_reports` | `SELECT` | `reports`, `replies` | Check if comment or replies have reports before delete |
 | `comment:update` | `UPDATE` | `comments` | Update comment text & `updated_at` |
 | `comment:get_updated` | `SELECT` | `comments`, `users`, `replies` | Fetch comment after update |
 | `comment:delete_replies`| `DELETE` | `replies` | Cascade delete replies under comment |
@@ -306,6 +325,8 @@ Every database query routes through `compat.run_query` with a descriptive `actio
 | `reply:list` | `SELECT` | `replies`, `users` | List replies for a comment with author JOINs |
 | `reply:create` | `INSERT` | `replies` | Insert reply under comment |
 | `reply:author_info` | `SELECT` | `users` | Fetch author details for new reply |
-| `reply:get_owner` | `SELECT` | `replies` | Check reply ownership before `PATCH` or `DELETE` |
+| `reply:get_owner` | `SELECT` | `replies` | Check reply ownership with `FOR UPDATE` before `PATCH` |
+| `reply:get_owner_for_delete` | `SELECT` | `replies` | Check reply ownership with `FOR UPDATE` before `DELETE` |
+| `reply:check_reports` | `SELECT` | `reports` | Check if reply has reports before delete |
 | `reply:update` | `UPDATE` | `replies` | Update reply text & `updated_at` |
 | `reply:delete` | `DELETE` | `replies` | Delete reply record |
